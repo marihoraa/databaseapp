@@ -1,184 +1,533 @@
-DROP DATABASE IF EXISTS aula_oltp;
-CREATE DATABASE aula_oltp CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-USE aula_oltp;
+-- ============================================================
+--   Autor: Maria Eduarda Cavalcante 
+-- ============================================================
 
-CREATE TABLE clientes (
-    id_cliente BIGINT PRIMARY KEY AUTO_INCREMENT,
-    nome VARCHAR(120) NOT NULL,
-    email VARCHAR(150) NOT NULL UNIQUE,
-    cpf CHAR(11) UNIQUE,
-    cidade VARCHAR(80),
+
+CREATE DATABASE IF NOT EXISTS db_oltp;
+USE db_oltp;
+
+CREATE TABLE categoria (
+    id_categoria INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    descricao TEXT
+);
+
+CREATE TABLE produto (
+    id_produto INT AUTO_INCREMENT PRIMARY KEY,
+    id_categoria INT NOT NULL,
+    nome VARCHAR(150) NOT NULL,
+    preco_unitario DECIMAL(10,2)  NOT NULL,
+    estoque INT NOT NULL DEFAULT 0,
+    CONSTRAINT fk_prod_cat FOREIGN KEY (id_categoria) REFERENCES categoria(id_categoria)
+);
+
+CREATE TABLE regiao (
+    id_regiao INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(50) NOT NULL 
+);
+
+CREATE TABLE cliente (
+    id_cliente INT AUTO_INCREMENT PRIMARY KEY,
+    id_regiao INT NOT NULL,
+    nome VARCHAR(150) NOT NULL,
+    email VARCHAR(150) UNIQUE,
+    cidade VARCHAR(100),
     estado CHAR(2),
-    data_cadastro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    status_cliente ENUM('ATIVO', 'INATIVO') NOT NULL DEFAULT 'ATIVO'
-) ENGINE=InnoDB;
+    data_cadastro DATE NOT NULL DEFAULT CURRENT_DATE,
+    CONSTRAINT fk_cli_reg FOREIGN KEY (id_regiao) REFERENCES regiao(id_regiao)
+);
 
-CREATE TABLE categorias (
-    id_categoria BIGINT PRIMARY KEY AUTO_INCREMENT,
-    nome_categoria VARCHAR(100) NOT NULL UNIQUE,
-    descricao VARCHAR(255)
-) ENGINE=InnoDB;
+CREATE TABLE vendedor (
+    id_vendedor INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(150) NOT NULL,
+    email VARCHAR(150) UNIQUE,
+    id_regiao INT NOT NULL,
+    CONSTRAINT fk_vend_reg FOREIGN KEY (id_regiao) REFERENCES regiao(id_regiao)
+);
 
-CREATE TABLE produtos (
-    id_produto BIGINT PRIMARY KEY AUTO_INCREMENT,
-    id_categoria BIGINT NOT NULL,
-    nome_produto VARCHAR(120) NOT NULL,
-    preco_unitario DECIMAL(12,2) NOT NULL,
-    estoque_atual INT NOT NULL DEFAULT 0,
-    CONSTRAINT fk_produtos_categoria FOREIGN KEY (id_categoria) REFERENCES categorias(id_categoria)
-) ENGINE=InnoDB;
+CREATE TABLE pedido (
+    id_pedido INT AUTO_INCREMENT PRIMARY KEY,
+    id_cliente INT NOT NULL,
+    id_vendedor INT NOT NULL,
+    data_pedido  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('pendente','confirmado','entregue','cancelado') DEFAULT 'pendente',
+    CONSTRAINT fk_ped_cli  FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
+    CONSTRAINT fk_ped_vend FOREIGN KEY (id_vendedor) REFERENCES vendedor(id_vendedor)
+);
 
-CREATE TABLE pedidos (
-    id_pedido BIGINT PRIMARY KEY AUTO_INCREMENT,
-    id_cliente BIGINT NOT NULL,
-    data_pedido DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    status_pedido ENUM('ABERTO', 'PAGO', 'ENTREGUE', 'CANCELADO') NOT NULL DEFAULT 'ABERTO',
-    valor_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-    desconto DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-    frete DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-    CONSTRAINT fk_pedidos_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente)
-) ENGINE=InnoDB;
-
-CREATE TABLE itens_pedido (
-    id_item BIGINT PRIMARY KEY AUTO_INCREMENT,
-    id_pedido BIGINT NOT NULL,
-    id_produto BIGINT NOT NULL,
+CREATE TABLE item_pedido (
+    id_item INT AUTO_INCREMENT PRIMARY KEY,
+    id_pedido INT NOT NULL,
+    id_produto INT NOT NULL,
     quantidade INT NOT NULL,
-    preco_unitario DECIMAL(12,2) NOT NULL,
-    subtotal DECIMAL(12,2) GENERATED ALWAYS AS (quantidade * preco_unitario) STORED,
-    CONSTRAINT fk_itens_pedido FOREIGN KEY (id_pedido) REFERENCES pedidos(id_pedido),
-    CONSTRAINT fk_itens_produto FOREIGN KEY (id_produto) REFERENCES produtos(id_produto)
-) ENGINE=InnoDB;
+    preco_vendido DECIMAL(10,2) NOT NULL,  
+    CONSTRAINT fk_item_ped  FOREIGN KEY (id_pedido) REFERENCES pedido(id_pedido),
+    CONSTRAINT fk_item_prod FOREIGN KEY (id_produto) REFERENCES produto(id_produto)
+);
 
-INSERT INTO clientes (nome, email, cidade, estado) VALUES
-('Ana Souza', 'ana@email.com', 'Recife', 'PE'),
-('Bruno Lima', 'bruno@email.com', 'Olinda', 'PE'),
-('Carla Mendes', 'carla@email.com', 'João Pessoa', 'PB'),
-('Diego Alves', 'diego@email.com', 'Jaboatão', 'PE');
+CREATE TABLE pagamento (
+    id_pagamento INT AUTO_INCREMENT PRIMARY KEY,
+    id_pedido INT NOT NULL UNIQUE,
+    forma_pagamento ENUM('cartao_credito','cartao_debito','boleto','pix') NOT NULL,
+    valor_pago DECIMAL(10,2) NOT NULL,
+    data_pagamento DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_pag_ped FOREIGN KEY (id_pedido) REFERENCES pedido(id_pedido)
+);
 
-INSERT INTO categorias (nome_categoria) VALUES ('Notebook'), ('Smartphone'), ('Acessório');
+INSERT INTO regiao (nome) VALUES
+    ('Norte'), ('Nordeste'), ('Centro-Oeste'), ('Sudeste'), ('Sul');
 
-INSERT INTO produtos (id_categoria, nome_produto, preco_unitario, estoque_atual) VALUES
-(1, 'Notebook Pro 14', 6500.00, 20),
-(2, 'Smartphone X', 3500.00, 30),
-(3, 'Headset Gamer', 400.00, 50);
+INSERT INTO categoria (nome, descricao) VALUES
+    ('Eletrônicos', 'Smartphones, notebooks, tablets'),
+    ('Vestuário', 'Roupas e acessórios'),
+    ('Alimentos', 'Produtos alimentícios'),
+    ('Livros', 'Livros físicos e digitais'),
+    ('Esportes', 'Artigos esportivos e academia');
 
-INSERT INTO pedidos (id_cliente, data_pedido, status_pedido, valor_total, desconto, frete) VALUES
-(1, '2026-01-10 09:00:00', 'PAGO', 6350.00, 200.00, 50.00),
-(2, '2026-02-15 14:00:00', 'ENTREGUE', 5580.00, 0.00, 80.00);
+INSERT INTO produto (id_categoria, nome, preco_unitario, estoque) VALUES
+    (1, 'Smartphone X Pro', 2499.90, 120),
+    (1, 'Notebook UltraSlim', 4799.00,  60),
+    (1, 'Tablet 10"', 1299.50,  80),
+    (2, 'Camiseta Polo', 89.90, 300),
+    (2, 'Tênis Running', 349.00, 150),
+    (3, 'Whey Protein 1kg', 159.90, 200),
+    (3, 'Barra de Cereal cx12', 24.90, 500),
+    (4, 'Clean Code - R.Martin', 79.90, 100),
+    (4, 'SQL Avançado', 69.90, 100),
+    (5, 'Bicicleta Speed', 1899.00,  40);
 
-INSERT INTO itens_pedido (id_pedido, id_produto, quantidade, preco_unitario) VALUES
-(1, 1, 1, 6500.00),
-(2, 2, 1, 3500.00),
-(2, 3, 1, 400.00);
+INSERT INTO vendedor (nome, email, id_regiao) VALUES
+    ('Carlos Silva', 'carlos@empresa.com', 4),
+    ('Ana Souza', 'ana@empresa.com', 2),
+    ('Pedro Lima', 'pedro@empresa.com', 5),
+    ('Maria Costa', 'maria@empresa.com', 4),
+    ('João Ferreira', 'joao@empresa.com', 1);
 
-DROP DATABASE IF EXISTS aula_olap;
-CREATE DATABASE aula_olap CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-USE aula_olap;
+INSERT INTO cliente (id_regiao, nome, email, cidade, estado, data_cadastro) VALUES
+    (4, 'Roberto Alves', 'roberto@email.com', 'São Paulo', 'SP', '2024-01-15'),
+    (4, 'Fernanda Rocha', 'fernanda@email.com', 'Campinas', 'SP', '2024-02-20'),
+    (2, 'Lucas Mendes', 'lucas@email.com', 'Fortaleza', 'CE', '2024-03-10'),
+    (5, 'Juliana Martins', 'juliana@email.com', 'Porto Alegre', 'RS', '2024-03-22'),
+    (1, 'Diego Nunes', 'diego@email.com', 'Manaus', 'AM', '2024-04-05'),
+    (3, 'Patrícia Gomes', 'patricia@email.com', 'Brasília', 'DF', '2024-04-18'),
+    (4, 'Thiago Barbosa', 'thiago@email.com', 'Rio de Janeiro', 'RJ', '2024-05-02'),
+    (2, 'Camila Lopes', 'camila@email.com', 'Recife', 'PE', '2024-05-30'),
+    (5, 'Rodrigo Pereira', 'rodrigo@email.com', 'Curitiba', 'PR', '2024-06-14'),
+    (4, 'Beatriz Santos', 'beatriz@email.com', 'Belo Horizonte',  'MG', '2024-07-01');
+
+-- Pedidos (simulando meses diferentes de 2024)
+INSERT INTO pedido (id_cliente, id_vendedor, data_pedido, status) VALUES
+    (1, 1, '2024-01-20 10:30:00', 'entregue'),
+    (2, 1, '2024-02-14 14:00:00', 'entregue'),
+    (3, 2, '2024-03-05 09:15:00', 'entregue'),
+    (4, 3, '2024-03-18 11:45:00', 'entregue'),
+    (5, 5, '2024-04-10 16:20:00', 'entregue'),
+    (6, 4, '2024-04-25 08:00:00', 'entregue'),
+    (7, 1, '2024-05-07 13:30:00', 'entregue'),
+    (8, 2, '2024-06-01 10:00:00', 'entregue'),
+    (9, 3, '2024-07-15 15:45:00', 'entregue'),
+    (10, 4, '2024-08-20 09:30:00', 'entregue'),
+    (1, 1, '2024-09-10 11:00:00', 'entregue'),
+    (2, 2, '2024-10-05 14:30:00', 'confirmado'),
+    (3, 5, '2024-11-20 16:00:00', 'pendente'),
+    (4, 3, '2024-12-01 10:15:00', 'confirmado'),
+    (5, 4, '2024-12-15 12:00:00', 'pendente');
+
+INSERT INTO item_pedido (id_pedido, id_produto, quantidade, preco_vendido) VALUES
+    (1, 1, 1, 2499.90),
+    (1, 8, 2, 79.90),  
+    (2, 2, 1, 4799.00),  
+    (3, 4, 3, 89.90),  
+    (3, 5, 1, 349.00),  
+    (4, 10,1, 1899.00),  
+    (5, 6, 2, 159.90),  
+    (5, 7,10, 24.90),  
+    (6, 3, 1, 1299.50),  
+    (7, 1, 2, 2499.90), 
+    (8, 9, 3, 69.90),  
+    (9, 5, 2, 349.00),   
+    (10, 2, 1, 4799.00),  
+    (11, 4, 5, 89.90),  
+    (12, 1, 1, 2499.90),  
+    (13, 6, 3, 159.90),  
+    (14, 10,1, 1899.00),  
+    (15, 3, 2, 1299.50);  
+
+INSERT INTO pagamento (id_pedido, forma_pagamento, valor_pago, data_pagamento) VALUES
+    (1, 'cartao_credito', 2659.70, '2024-01-20 10:35:00'),
+    (2, 'pix', 4799.00, '2024-02-14 14:05:00'),
+    (3, 'boleto', 619.70, '2024-03-07 00:00:00'),
+    (4, 'cartao_debito',  1899.00, '2024-03-18 11:50:00'),
+    (5, 'pix', 568.80, '2024-04-10 16:25:00'),
+    (6, 'cartao_credito', 1299.50, '2024-04-25 08:10:00'),
+    (7, 'pix', 4999.80, '2024-05-07 13:35:00'),
+    (8, 'boleto', 209.70, '2024-06-03 00:00:00'),
+    (9, 'cartao_credito',  698.00, '2024-07-15 15:50:00'),
+    (10,'pix', 4799.00, '2024-08-20 09:35:00');
+    
+SELECT
+    p.id_pedido,
+    c.nome AS cliente,
+    v.nome AS vendedor,
+    p.data_pedido,
+    p.status,
+    pr.nome AS produto,
+    ip.quantidade,
+    ip.preco_vendido,
+    (ip.quantidade * ip.preco_vendido) AS subtotal
+FROM pedido p
+JOIN cliente c ON c.id_cliente  = p.id_cliente
+JOIN vendedor v ON v.id_vendedor = p.id_vendedor
+JOIN item_pedido ip ON ip.id_pedido = p.id_pedido
+JOIN produto pr ON pr.id_produto = ip.id_produto
+WHERE p.id_pedido = 1;
+
+SELECT nome, estoque, preco_unitario
+FROM produto
+WHERE id_produto = 1;
+
+SELECT
+    p.id_pedido,
+    c.nome AS cliente,
+    p.data_pedido,
+    p.status
+FROM pedido p
+JOIN cliente c ON c.id_cliente = p.id_cliente
+WHERE p.status IN ('pendente', 'confirmado')
+ORDER BY p.data_pedido;
+
+UPDATE pedido
+SET status = 'entregue'
+WHERE id_pedido = 12;
+
+INSERT INTO pedido (id_cliente, id_vendedor, data_pedido, status)
+VALUES (6, 2, NOW(), 'confirmado');
+
+SELECT
+    p.id_pedido,
+    p.data_pedido,
+    p.status,
+    SUM(ip.quantidade * ip.preco_vendido) AS total_pedido
+FROM pedido p
+JOIN item_pedido ip ON ip.id_pedido = p.id_pedido
+WHERE p.id_cliente = 1
+GROUP BY p.id_pedido, p.data_pedido, p.status
+ORDER BY p.data_pedido DESC;
+
+CREATE DATABASE IF NOT EXISTS db_olap;
+USE db_olap;
 
 CREATE TABLE dim_tempo (
-    id_tempo INT PRIMARY KEY,
+    id_tempo INT  PRIMARY KEY,
     data_completa DATE NOT NULL,
-    ano SMALLINT NOT NULL,
-    mes TINYINT NOT NULL,
-    nome_mes VARCHAR(20) NOT NULL
-) ENGINE=InnoDB;
+    ano INT  NOT NULL,
+    semestre INT  NOT NULL,
+    trimestre INT  NOT NULL,    
+    mes INT  NOT NULL,   
+    nome_mes VARCHAR(20) NOT NULL,
+    semana INT  NOT NULL, 
+    dia INT  NOT NULL,
+    dia_semana VARCHAR(15) NOT NULL,
+    eh_fim_semana TINYINT(1) NOT NULL
+);
 
-CREATE TABLE dim_cliente (
-    id_cliente_sk BIGINT PRIMARY KEY AUTO_INCREMENT,
-    id_cliente_nk BIGINT NOT NULL,
-    nome_cliente VARCHAR(120) NOT NULL,
-    estado CHAR(2),
-    registro_ativo CHAR(1) DEFAULT 'S'
-) ENGINE=InnoDB;
+
+INSERT INTO dim_tempo (id_tempo, data_completa, ano, semestre, trimestre, mes, nome_mes, semana, dia, dia_semana, eh_fim_semana)
+WITH RECURSIVE datas AS (
+    SELECT CAST('2024-01-01' AS DATE) AS d
+    UNION ALL
+    SELECT DATE_ADD(d, INTERVAL 1 DAY)
+    FROM datas
+    WHERE d < '2024-12-31'
+)
+SELECT
+    CAST(DATE_FORMAT(d, '%Y%m%d') AS UNSIGNED) AS id_tempo,
+    d AS data_completa,
+    YEAR(d) AS ano,
+    IF(MONTH(d) <= 6, 1, 2) AS semestre,
+    QUARTER(d) AS trimestre,
+    MONTH(d) AS mes,
+    DATE_FORMAT(d,'%M') AS nome_mes,
+    WEEK(d, 1) AS semana,
+    DAY(d) AS dia,
+    DATE_FORMAT(d,'%W') AS dia_semana,
+    IF(DAYOFWEEK(d) IN (1,7), 1, 0) AS eh_fim_semana
+FROM datas;
 
 CREATE TABLE dim_produto (
-    id_produto_sk BIGINT PRIMARY KEY AUTO_INCREMENT,
-    id_produto_nk BIGINT NOT NULL,
-    nome_produto VARCHAR(120) NOT NULL,
+    id_produto INT PRIMARY KEY,
+    nome_produto VARCHAR(150) NOT NULL,
     categoria VARCHAR(100) NOT NULL,
-    registro_ativo CHAR(1) DEFAULT 'S'
-) ENGINE=InnoDB;
+    faixa_preco VARCHAR(30) NOT NULL 
+);
+
+INSERT INTO dim_produto VALUES
+    (1, 'Smartphone X Pro', 'Eletrônicos', 'Premium'),
+    (2, 'Notebook UltraSlim', 'Eletrônicos', 'Premium'),
+    (3, 'Tablet 10"', 'Eletrônicos', 'Médio'),
+    (4, 'Camiseta Polo', 'Vestuário', 'Econômico'),
+    (5, 'Tênis Running', 'Vestuário', 'Médio'),
+    (6, 'Whey Protein 1kg', 'Alimentos','Médio'),
+    (7, 'Barra de Cereal cx12', 'Alimentos','Econômico'),
+    (8, 'Clean Code','Livros', 'Econômico'),
+    (9, 'SQL Avançado', 'Livros', 'Econômico'),
+    (10,'Bicicleta Speed', 'Esportes', 'Premium');
+
+CREATE TABLE dim_cliente (
+    id_cliente INT PRIMARY KEY,
+    nome_cliente VARCHAR(150) NOT NULL,
+    cidade VARCHAR(100),
+    estado CHAR(2),
+    regiao VARCHAR(50) NOT NULL
+);
+
+INSERT INTO dim_cliente VALUES
+    (1,  'Roberto Alves', 'São Paulo', 'SP', 'Sudeste'),
+    (2,  'Fernanda Rocha', 'Campinas','SP', 'Sudeste'),
+    (3,  'Lucas Mendes', 'Fortaleza','CE', 'Nordeste'),
+    (4,  'Juliana Martins', 'Porto Alegre','RS', 'Sul'),
+    (5,  'Diego Nunes','Manaus','AM', 'Norte'),
+    (6,  'Patrícia Gomes', 'Brasília', 'DF', 'Centro-Oeste'),
+    (7,  'Thiago Barbosa','Rio de Janeiro', 'RJ', 'Sudeste'),
+    (8,  'Camila Lopes', 'Recife', 'PE', 'Nordeste'),
+    (9,  'Rodrigo Pereira', 'Curitiba','PR', 'Sul'),
+    (10, 'Beatriz Santos', 'Belo Horizonte', 'MG','Sudeste');
+
+CREATE TABLE dim_vendedor (
+    id_vendedor INT PRIMARY KEY,
+    nome_vendedor VARCHAR(150) NOT NULL,
+    regiao_atuacao VARCHAR(50) NOT NULL
+);
+
+INSERT INTO dim_vendedor VALUES
+    (1, 'Carlos Silva', 'Sudeste'),
+    (2, 'Ana Souza', 'Nordeste'),
+    (3, 'Pedro Lima', 'Sul'),
+    (4, 'Maria Costa', 'Sudeste'),
+    (5, 'João Ferreira', 'Norte');
 
 CREATE TABLE fato_vendas (
-    id_fato BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id_fato BIGINT AUTO_INCREMENT PRIMARY KEY,
     id_tempo INT NOT NULL,
-    id_cliente_sk BIGINT NOT NULL,
-    id_produto_sk BIGINT NOT NULL,
+    id_produto INT NOT NULL,
+    id_cliente INT NOT NULL,
+    id_vendedor INT NOT NULL,
+    id_pedido INT NOT NULL,
     quantidade INT NOT NULL,
-    valor_liquido DECIMAL(12,2) NOT NULL,
-    FOREIGN KEY (id_tempo) REFERENCES dim_tempo(id_tempo),
-    FOREIGN KEY (id_cliente_sk) REFERENCES dim_cliente(id_cliente_sk),
-    FOREIGN KEY (id_produto_sk) REFERENCES dim_produto(id_produto_sk)
-) ENGINE=InnoDB;
+    preco_unitario DECIMAL(10,2) NOT NULL,
+    valor_total DECIMAL(12,2) NOT NULL, 
+    INDEX idx_tempo (id_tempo),
+    INDEX idx_produto (id_produto),
+    INDEX idx_cliente (id_cliente),
+    INDEX idx_vendedor (id_vendedor),
+    CONSTRAINT fk_ft_tempo FOREIGN KEY (id_tempo) REFERENCES dim_tempo(id_tempo),
+    CONSTRAINT fk_ft_prod FOREIGN KEY (id_produto) REFERENCES dim_produto(id_produto),
+    CONSTRAINT fk_ft_cli FOREIGN KEY (id_cliente)  REFERENCES dim_cliente(id_cliente),
+    CONSTRAINT fk_ft_vend FOREIGN KEY (id_vendedor) REFERENCES dim_vendedor(id_vendedor)
+);
 
-INSERT INTO dim_tempo (id_tempo, data_completa, ano, mes, nome_mes)
-VALUES 
-(20260110, '2026-01-10', 2026, 1, 'Janeiro'),
-(20260215, '2026-02-15', 2026, 2, 'Fevereiro'),
-(20260301, '2026-03-01', 2026, 3, 'Março');
+INSERT INTO fato_vendas (id_tempo, id_produto, id_cliente, id_vendedor, id_pedido, quantidade, preco_unitario, valor_total)
+VALUES
+    (20240120, 1, 1, 1, 1, 1, 2499.90, 2499.90),
+    (20240120, 8, 1, 1, 1, 2, 79.90, 159.80),
+    (20240214, 2, 2, 1, 2, 1, 4799.00, 4799.00),
+    (20240305, 4, 3, 2, 3, 3, 89.90, 269.70),
+    (20240305, 5, 3, 2, 3, 1, 349.00, 349.00),
+    (20240318, 10, 4, 3, 4, 1, 1899.00, 1899.00),
+    (20240410, 6, 5, 5, 5, 2, 159.90, 319.80),
+    (20240410, 7, 5, 5, 5, 10,  24.90, 249.00),
+    (20240425, 3, 6, 4, 6, 1, 1299.50, 1299.50),
+    (20240507, 1, 7, 1, 7, 2, 2499.90, 4999.80),
+    (20240601, 9, 8, 2, 8, 3, 69.90, 209.70),
+    (20240715, 5, 9, 3, 9, 2, 349.00, 698.00),
+    (20240820, 2, 10, 4, 10, 1, 4799.00, 4799.00),
+    (20240910, 4, 1, 1, 11, 5, 89.90, 449.50),
+    (20241005, 1, 2, 2, 12, 1, 2499.90, 2499.90),
+    (20241120, 6, 3, 5, 13, 3, 159.90, 479.70),
+    (20241201, 10, 4, 3, 14, 1, 1899.00, 1899.00),
+    (20241215, 3, 5, 4, 15, 2, 1299.50, 2599.00);
 
-INSERT INTO dim_cliente (id_cliente_nk, nome_cliente, estado)
-SELECT id_cliente, nome, estado FROM aula_oltp.clientes;
+SELECT
+    t.ano,
+    t.mes,
+    t.nome_mes,
+    COUNT(DISTINCT fv.id_pedido) AS qtd_pedidos,
+    SUM(fv.quantidade) AS unidades_vendidas,
+    SUM(fv.valor_total) AS receita_total
+FROM fato_vendas fv
+JOIN dim_tempo t ON t.id_tempo = fv.id_tempo
+GROUP BY t.ano, t.mes, t.nome_mes
+ORDER BY t.ano, t.mes;
 
-INSERT INTO dim_produto (id_produto_nk, nome_produto, categoria)
-SELECT p.id_produto, p.nome_produto, c.nome_categoria
-FROM aula_oltp.produtos p
-INNER JOIN aula_oltp.categorias c ON p.id_categoria = c.id_categoria;
+SELECT
+    p.categoria,
+    t.trimestre,
+    SUM(fv.valor_total) AS receita,
+    SUM(fv.quantidade) AS unidades
+FROM fato_vendas fv
+JOIN dim_produto p ON p.id_produto = fv.id_produto
+JOIN dim_tempo t ON t.id_tempo = fv.id_tempo
+GROUP BY p.categoria, t.trimestre
+ORDER BY p.categoria, t.trimestre;
 
-INSERT INTO fato_vendas (id_tempo, id_cliente_sk, id_produto_sk, quantidade, valor_liquido)
-SELECT 
-    DATE_FORMAT(pe.data_pedido, '%Y%m%d') + 0,
-    dc.id_cliente_sk,
-    dp.id_produto_sk,
-    ip.quantidade,
-    ROUND((ip.subtotal) - (ip.subtotal / res.total_pedido * pe.desconto) + (ip.subtotal / res.total_pedido * pe.frete), 2)
-FROM aula_oltp.itens_pedido ip
-INNER JOIN aula_oltp.pedidos pe ON ip.id_pedido = pe.id_pedido
-INNER JOIN (
-    SELECT id_pedido, SUM(subtotal) as total_pedido 
-    FROM aula_oltp.itens_pedido GROUP BY id_pedido
-) res ON pe.id_pedido = res.id_pedido
-INNER JOIN dim_cliente dc ON pe.id_cliente = dc.id_cliente_nk
-INNER JOIN dim_produto dp ON ip.id_produto = dp.id_produto_nk
-WHERE pe.status_pedido <> 'CANCELADO';
-
-SELECT 
-    t.nome_mes, 
-    COALESCE(SUM(f.valor_liquido), 0) AS faturamento
-FROM dim_tempo t
-LEFT JOIN fato_vendas f ON t.id_tempo = f.id_tempo
-GROUP BY t.id_tempo, t.nome_mes
-ORDER BY t.id_tempo;
-
-SELECT 
-    p.nome_produto, 
-    COALESCE(SUM(f.quantidade), 0) AS total_vendido
-FROM dim_produto p
-LEFT JOIN fato_vendas f ON p.id_produto_sk = f.id_produto_sk
-GROUP BY p.id_produto_sk, p.nome_produto
-ORDER BY total_vendido DESC;
-
-SELECT 
-    c.nome_cliente, 
-    COALESCE(SUM(f.valor_liquido), 0) AS total_gasto
-FROM dim_cliente c
-LEFT JOIN fato_vendas f ON c.id_cliente_sk = f.id_cliente_sk
-GROUP BY c.id_cliente_sk, c.nome_cliente
-ORDER BY total_gasto DESC;
-
-SELECT 
-    f.id_fato,
-    t.data_completa,
-    c.nome_cliente,
+SELECT
     p.nome_produto,
-    f.valor_liquido
-FROM fato_vendas f
-INNER JOIN dim_tempo t   ON f.id_tempo = t.id_tempo
-INNER JOIN dim_cliente c ON f.id_cliente_sk = c.id_cliente_sk
-INNER JOIN dim_produto p ON f.id_produto_sk = p.id_produto_sk;
+    p.categoria,
+    p.faixa_preco,
+    SUM(fv.valor_total) AS receita_total,
+    SUM(fv.quantidade) AS unidades_vendidas,
+    RANK() OVER (ORDER BY SUM(fv.valor_total) DESC) AS ranking
+FROM fato_vendas fv
+JOIN dim_produto p ON p.id_produto = fv.id_produto
+GROUP BY p.id_produto, p.nome_produto, p.categoria, p.faixa_preco
+ORDER BY ranking;
 
-/* Estas consultas foram refatoradas a partir do LEFT JOIN, partindo de suas respectivas dimensões. O LEFT JOIN aplicado também garantirá
-que o mês, produto ou cliente permaneça sendo exibido na lista mesmo que o valor da venda seja equivalente a zero.
-Além disso, o uso de INNER JOINS com tabelas derivadas permite o cálculo entre: peso e total do pedido, agregando o frete e desconto.
-*/
+SELECT
+    v.nome_vendedor,
+    v.regiao_atuacao,
+    COUNT(DISTINCT fv.id_pedido) AS pedidos_fechados,
+    SUM(fv.valor_total) AS receita_gerada,
+    AVG(fv.valor_total) AS ticket_medio
+FROM fato_vendas fv
+JOIN dim_vendedor v ON v.id_vendedor = fv.id_vendedor
+GROUP BY v.id_vendedor, v.nome_vendedor, v.regiao_atuacao
+ORDER BY receita_gerada DESC;
+
+SELECT
+    c.regiao,
+    c.estado,
+    COUNT(DISTINCT fv.id_cliente) AS clientes_compradores,
+    SUM(fv.valor_total) AS receita,
+    AVG(fv.valor_total) AS ticket_medio_item
+FROM fato_vendas fv
+JOIN dim_cliente c ON c.id_cliente = fv.id_cliente
+GROUP BY c.regiao, c.estado
+ORDER BY receita DESC;
+
+    COALESCE(p.categoria, '>>> TOTAL GERAL <<<') AS categoria,
+    COALESCE(p.nome_produto, ' >> Subtotal Cat.') AS produto,
+    SUM(fv.valor_total) AS receita,
+    SUM(fv.quantidade) AS unidades
+FROM fato_vendas fv
+JOIN dim_produto p ON p.id_produto = fv.id_produto
+GROUP BY p.categoria, p.nome_produto WITH ROLLUP;
+
+SELECT
+    p.categoria,
+    SUM(fv.valor_total) AS receita_categoria,
+    SUM(SUM(fv.valor_total)) OVER () AS receita_total,
+    ROUND(
+        100.0 * SUM(fv.valor_total)
+        / SUM(SUM(fv.valor_total)) OVER (), 2
+    )  AS pct_participacao
+FROM fato_vendas fv
+JOIN dim_produto p ON p.id_produto = fv.id_produto
+GROUP BY p.categoria
+ORDER BY receita_categoria DESC;
+
+SELECT
+    t.mes,
+    t.nome_mes,
+    SUM(fv.valor_total) AS receita_mes,
+    SUM(SUM(fv.valor_total)) OVER (ORDER BY t.mes) AS receita_acumulada
+FROM fato_vendas fv
+JOIN dim_tempo t ON t.id_tempo = fv.id_tempo
+GROUP BY t.mes, t.nome_mes
+ORDER BY t.mes;
+
+SELECT
+    t.mes,
+    t.nome_mes,
+    SUM(fv.valor_total) AS receita_mes,
+    LAG(SUM(fv.valor_total)) OVER (ORDER BY t.mes) AS receita_mes_anterior,
+    SUM(fv.valor_total)
+        - LAG(SUM(fv.valor_total)) OVER (ORDER BY t.mes) AS variacao_absoluta,
+    ROUND(100.0 * (
+        SUM(fv.valor_total)
+        - LAG(SUM(fv.valor_total)) OVER (ORDER BY t.mes)
+    ) / NULLIF(LAG(SUM(fv.valor_total)) OVER (ORDER BY t.mes),0), 2) AS variacao_pct
+FROM fato_vendas fv
+JOIN dim_tempo t ON t.id_tempo = fv.id_tempo
+GROUP BY t.mes, t.nome_mes
+ORDER BY t.mes;
+
+SELECT
+    c.regiao,
+    SUM(CASE WHEN p.categoria = 'Eletrônicos' THEN fv.valor_total ELSE 0 END) AS eletronicos,
+    SUM(CASE WHEN p.categoria = 'Vestuário' THEN fv.valor_total ELSE 0 END) AS vestuario,
+    SUM(CASE WHEN p.categoria = 'Alimentos' THEN fv.valor_total ELSE 0 END) AS alimentos,
+    SUM(CASE WHEN p.categoria = 'Livros' THEN fv.valor_total ELSE 0 END) AS livros,
+    SUM(CASE WHEN p.categoria = 'Esportes' THEN fv.valor_total ELSE 0 END) AS esportes,
+    SUM(fv.valor_total) AS total_regiao
+FROM fato_vendas fv
+JOIN dim_cliente c ON c.id_cliente = fv.id_cliente
+JOIN dim_produto p ON p.id_produto = fv.id_produto
+GROUP BY c.regiao
+ORDER BY total_regiao DESC;
+
+SELECT
+    c.nome_cliente,
+    c.cidade,
+    c.regiao,
+    COUNT(DISTINCT fv.id_pedido) AS total_pedidos,
+    SUM(fv.valor_total) AS ltv_total,
+    AVG(fv.valor_total) AS ticket_medio,
+    MIN(t.data_completa) AS primeira_compra,
+    MAX(t.data_completa) AS ultima_compra,
+    DATEDIFF(MAX(t.data_completa), MIN(t.data_completa)) AS dias_como_cliente
+FROM fato_vendas fv
+JOIN dim_cliente c ON c.id_cliente = fv.id_cliente
+JOIN dim_tempo t ON t.id_tempo = fv.id_tempo
+GROUP BY c.id_cliente, c.nome_cliente, c.cidade, c.regiao
+ORDER BY ltv_total DESC;
+
+SELECT
+    t.semestre,
+    p.faixa_preco,
+    COUNT(*) AS transacoes,
+    SUM(fv.valor_total) AS receita,
+    AVG(fv.valor_total) AS ticket_medio
+FROM fato_vendas fv
+JOIN dim_produto p ON p.id_produto = fv.id_produto
+JOIN dim_tempo t ON t.id_tempo = fv.id_tempo
+GROUP BY t.semestre, p.faixa_preco
+ORDER BY t.semestre, receita DESC; 
+
+USE db_oltp;
+
+CREATE OR REPLACE VIEW vw_extracao_para_olap AS
+SELECT
+    p.id_pedido,
+    DATE_FORMAT(p.data_pedido, '%Y%m%d') AS id_tempo,
+    ip.id_produto,
+    p.id_cliente,
+    p.id_vendedor,
+    ip.quantidade,
+    ip.preco_vendido AS preco_unitario,
+    (ip.quantidade * ip.preco_vendido) AS valor_total
+FROM pedido p
+JOIN item_pedido ip ON ip.id_pedido = p.id_pedido
+WHERE p.status != 'cancelado';
+
+SELECT * FROM vw_extracao_para_olap ORDER BY id_tempo;
+
+USE db_olap;
+
+CREATE TABLE IF NOT EXISTS comparativo_oltp_olap (
+    criterio VARCHAR(30),
+    oltp VARCHAR(200),
+    olap VARCHAR(200)
+);
+
+INSERT INTO comparativo_oltp_olap VALUES
+('Objetivo', 'Processamento rápido de transações', 'Análise complexa e suporte à decisão'),
+('Estrutura', 'Tabelas normalizadas (evita redundância)','Cubos/estrela desnormalizados (agregação)'),
+('Performance', 'Otimizado para CRUD contínuos', 'Otimizado para leitura pesada e joins'),
+('Consultas', 'Simples, rápidas e pontuais', 'Complexas, volumosas, com agregações'),
+('Usuário típico', 'Sistema operacional / App', 'Analista de dados / BI / Gestor'),
+('Volume dados', 'Registros individuais (linhas)', 'Histórico consolidado (anos de dados)'),
+('Atualização', 'Constante (INSERT/UPDATE/DELETE)', 'Periódica via ETL (batch)'),
+('Exemplo query', 'WHERE id = 1 (1 registro)', 'GROUP BY ano, mes (milhões de linhas)');
+
+SELECT * FROM comparativo_oltp_olap;
+
