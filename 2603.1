@@ -1,0 +1,184 @@
+DROP DATABASE IF EXISTS aula_oltp;
+CREATE DATABASE aula_oltp CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE aula_oltp;
+
+CREATE TABLE clientes (
+    id_cliente BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nome VARCHAR(120) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    cpf CHAR(11) UNIQUE,
+    cidade VARCHAR(80),
+    estado CHAR(2),
+    data_cadastro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status_cliente ENUM('ATIVO', 'INATIVO') NOT NULL DEFAULT 'ATIVO'
+) ENGINE=InnoDB;
+
+CREATE TABLE categorias (
+    id_categoria BIGINT PRIMARY KEY AUTO_INCREMENT,
+    nome_categoria VARCHAR(100) NOT NULL UNIQUE,
+    descricao VARCHAR(255)
+) ENGINE=InnoDB;
+
+CREATE TABLE produtos (
+    id_produto BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id_categoria BIGINT NOT NULL,
+    nome_produto VARCHAR(120) NOT NULL,
+    preco_unitario DECIMAL(12,2) NOT NULL,
+    estoque_atual INT NOT NULL DEFAULT 0,
+    CONSTRAINT fk_produtos_categoria FOREIGN KEY (id_categoria) REFERENCES categorias(id_categoria)
+) ENGINE=InnoDB;
+
+CREATE TABLE pedidos (
+    id_pedido BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id_cliente BIGINT NOT NULL,
+    data_pedido DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status_pedido ENUM('ABERTO', 'PAGO', 'ENTREGUE', 'CANCELADO') NOT NULL DEFAULT 'ABERTO',
+    valor_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    desconto DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    frete DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    CONSTRAINT fk_pedidos_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente)
+) ENGINE=InnoDB;
+
+CREATE TABLE itens_pedido (
+    id_item BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id_pedido BIGINT NOT NULL,
+    id_produto BIGINT NOT NULL,
+    quantidade INT NOT NULL,
+    preco_unitario DECIMAL(12,2) NOT NULL,
+    subtotal DECIMAL(12,2) GENERATED ALWAYS AS (quantidade * preco_unitario) STORED,
+    CONSTRAINT fk_itens_pedido FOREIGN KEY (id_pedido) REFERENCES pedidos(id_pedido),
+    CONSTRAINT fk_itens_produto FOREIGN KEY (id_produto) REFERENCES produtos(id_produto)
+) ENGINE=InnoDB;
+
+INSERT INTO clientes (nome, email, cidade, estado) VALUES
+('Ana Souza', 'ana@email.com', 'Recife', 'PE'),
+('Bruno Lima', 'bruno@email.com', 'Olinda', 'PE'),
+('Carla Mendes', 'carla@email.com', 'João Pessoa', 'PB'),
+('Diego Alves', 'diego@email.com', 'Jaboatão', 'PE');
+
+INSERT INTO categorias (nome_categoria) VALUES ('Notebook'), ('Smartphone'), ('Acessório');
+
+INSERT INTO produtos (id_categoria, nome_produto, preco_unitario, estoque_atual) VALUES
+(1, 'Notebook Pro 14', 6500.00, 20),
+(2, 'Smartphone X', 3500.00, 30),
+(3, 'Headset Gamer', 400.00, 50);
+
+INSERT INTO pedidos (id_cliente, data_pedido, status_pedido, valor_total, desconto, frete) VALUES
+(1, '2026-01-10 09:00:00', 'PAGO', 6350.00, 200.00, 50.00),
+(2, '2026-02-15 14:00:00', 'ENTREGUE', 5580.00, 0.00, 80.00);
+
+INSERT INTO itens_pedido (id_pedido, id_produto, quantidade, preco_unitario) VALUES
+(1, 1, 1, 6500.00),
+(2, 2, 1, 3500.00),
+(2, 3, 1, 400.00);
+
+DROP DATABASE IF EXISTS aula_olap;
+CREATE DATABASE aula_olap CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE aula_olap;
+
+CREATE TABLE dim_tempo (
+    id_tempo INT PRIMARY KEY,
+    data_completa DATE NOT NULL,
+    ano SMALLINT NOT NULL,
+    mes TINYINT NOT NULL,
+    nome_mes VARCHAR(20) NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE dim_cliente (
+    id_cliente_sk BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id_cliente_nk BIGINT NOT NULL,
+    nome_cliente VARCHAR(120) NOT NULL,
+    estado CHAR(2),
+    registro_ativo CHAR(1) DEFAULT 'S'
+) ENGINE=InnoDB;
+
+CREATE TABLE dim_produto (
+    id_produto_sk BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id_produto_nk BIGINT NOT NULL,
+    nome_produto VARCHAR(120) NOT NULL,
+    categoria VARCHAR(100) NOT NULL,
+    registro_ativo CHAR(1) DEFAULT 'S'
+) ENGINE=InnoDB;
+
+CREATE TABLE fato_vendas (
+    id_fato BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id_tempo INT NOT NULL,
+    id_cliente_sk BIGINT NOT NULL,
+    id_produto_sk BIGINT NOT NULL,
+    quantidade INT NOT NULL,
+    valor_liquido DECIMAL(12,2) NOT NULL,
+    FOREIGN KEY (id_tempo) REFERENCES dim_tempo(id_tempo),
+    FOREIGN KEY (id_cliente_sk) REFERENCES dim_cliente(id_cliente_sk),
+    FOREIGN KEY (id_produto_sk) REFERENCES dim_produto(id_produto_sk)
+) ENGINE=InnoDB;
+
+INSERT INTO dim_tempo (id_tempo, data_completa, ano, mes, nome_mes)
+VALUES 
+(20260110, '2026-01-10', 2026, 1, 'Janeiro'),
+(20260215, '2026-02-15', 2026, 2, 'Fevereiro'),
+(20260301, '2026-03-01', 2026, 3, 'Março');
+
+INSERT INTO dim_cliente (id_cliente_nk, nome_cliente, estado)
+SELECT id_cliente, nome, estado FROM aula_oltp.clientes;
+
+INSERT INTO dim_produto (id_produto_nk, nome_produto, categoria)
+SELECT p.id_produto, p.nome_produto, c.nome_categoria
+FROM aula_oltp.produtos p
+INNER JOIN aula_oltp.categorias c ON p.id_categoria = c.id_categoria;
+
+INSERT INTO fato_vendas (id_tempo, id_cliente_sk, id_produto_sk, quantidade, valor_liquido)
+SELECT 
+    DATE_FORMAT(pe.data_pedido, '%Y%m%d') + 0,
+    dc.id_cliente_sk,
+    dp.id_produto_sk,
+    ip.quantidade,
+    ROUND((ip.subtotal) - (ip.subtotal / res.total_pedido * pe.desconto) + (ip.subtotal / res.total_pedido * pe.frete), 2)
+FROM aula_oltp.itens_pedido ip
+INNER JOIN aula_oltp.pedidos pe ON ip.id_pedido = pe.id_pedido
+INNER JOIN (
+    SELECT id_pedido, SUM(subtotal) as total_pedido 
+    FROM aula_oltp.itens_pedido GROUP BY id_pedido
+) res ON pe.id_pedido = res.id_pedido
+INNER JOIN dim_cliente dc ON pe.id_cliente = dc.id_cliente_nk
+INNER JOIN dim_produto dp ON ip.id_produto = dp.id_produto_nk
+WHERE pe.status_pedido <> 'CANCELADO';
+
+SELECT 
+    t.nome_mes, 
+    COALESCE(SUM(f.valor_liquido), 0) AS faturamento
+FROM dim_tempo t
+LEFT JOIN fato_vendas f ON t.id_tempo = f.id_tempo
+GROUP BY t.id_tempo, t.nome_mes
+ORDER BY t.id_tempo;
+
+SELECT 
+    p.nome_produto, 
+    COALESCE(SUM(f.quantidade), 0) AS total_vendido
+FROM dim_produto p
+LEFT JOIN fato_vendas f ON p.id_produto_sk = f.id_produto_sk
+GROUP BY p.id_produto_sk, p.nome_produto
+ORDER BY total_vendido DESC;
+
+SELECT 
+    c.nome_cliente, 
+    COALESCE(SUM(f.valor_liquido), 0) AS total_gasto
+FROM dim_cliente c
+LEFT JOIN fato_vendas f ON c.id_cliente_sk = f.id_cliente_sk
+GROUP BY c.id_cliente_sk, c.nome_cliente
+ORDER BY total_gasto DESC;
+
+SELECT 
+    f.id_fato,
+    t.data_completa,
+    c.nome_cliente,
+    p.nome_produto,
+    f.valor_liquido
+FROM fato_vendas f
+INNER JOIN dim_tempo t   ON f.id_tempo = t.id_tempo
+INNER JOIN dim_cliente c ON f.id_cliente_sk = c.id_cliente_sk
+INNER JOIN dim_produto p ON f.id_produto_sk = p.id_produto_sk;
+
+/* Estas consultas foram refatoradas a partir do LEFT JOIN, partindo de suas respectivas dimensões. O LEFT JOIN aplicado também garantirá
+que o mês, produto ou cliente permaneça sendo exibido na lista mesmo que o valor da venda seja equivalente a zero.
+Além disso, o uso de INNER JOINS com tabelas derivadas permite o cálculo entre: peso e total do pedido, agregando o frete e desconto.
+*/
